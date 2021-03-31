@@ -1,0 +1,42 @@
+# Homebrew
+alias bs='omz update; brew update; brew outdated; brew upgrade; brew cleanup'
+
+# Git
+alias gfp='git fetch -p; git pull'
+alias water='gfp; gm $1'
+alias gsm='gcm; gfp'
+alias gsd='git co dev; gfp'
+alias mega-sync='gcm; gfp; bundle; rake db:migrate; git co .'
+alias gmm='git merge master'
+alias gm='git merge $1'
+
+# Vagrant
+alias vu='vagrant up'
+alias vh='vagrant halt'
+alias vs='vagrant ssh'
+alias vus='vu; vs'
+alias vsc='vagrant ssh-config'
+
+# Rails
+alias rdm='rake db:migrate'
+alias rdtm='rake data:migrate'
+alias rum='bundle; rdm'
+
+# Custom
+alias randomize='~/.randomizer.rb $1'
+alias krails="lsof -w -n -i tcp:3000 | grep LISTEN | awk '{ print \$2 }' | xargs kill -9"
+alias srails="lsof -w -n -i tcp:3000"
+alias rubodiff='git diff HEAD --name-only | grep .rb | xargs rubocop'
+alias rubodiff!='git diff HEAD --name-only | grep .rb | xargs rubocop -a'
+alias yarnd='yarn run dev'
+alias prepare='bundle; yarn; rdm; rdtm'
+
+# Services
+alias bsre='brew services run elasticsearch'
+alias redis-start='redis-server /usr/local/etc/redis.conf'
+alias sidekiq-start='sidekiq -C config/sidekiq.yml -e development sidekiq'
+
+# Klarx
+alias kce='EDITOR=vim bin/rails credentials:edit --environment $1'
+alias yip='yarn install && cd engines/homepage && yarn install && cd -'
+alias klarx-console="ssh -t root@206.189.59.230 docker exec -e 'RAILS_ENV=production' -ti klarx_app bundle exec rails c"

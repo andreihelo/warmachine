@@ -1,0 +1,271 @@
+#!/bin/sh
+
+# Welcome to the my own installation script!
+# Be prepared to turn your laptop into an awesome war (development) machine.
+
+fancy_echo() {
+  local fmt="$1"; shift
+
+  # shellcheck disable=SC2059
+  printf "\\n$fmt\\n" "$@"
+}
+
+append_to_zshrc() {
+  local text="$1" zshrc
+  local skip_new_line="${2:-0}"
+
+  if [ -w "$HOME/.zshrc.local" ]; then
+    zshrc="$HOME/.zshrc.local"
+  else
+    zshrc="$HOME/.zshrc"
+  fi
+
+  if ! grep -Fqs "$text" "$zshrc"; then
+    if [ "$skip_new_line" -eq 1 ]; then
+      printf "%s\\n" "$text" >> "$zshrc"
+    else
+      printf "\\n%s\\n" "$text" >> "$zshrc"
+    fi
+  fi
+}
+
+# shellcheck disable=SC2154
+trap 'ret=$?; test $ret -ne 0 && printf "failed\n\n" >&2; exit $ret' EXIT
+
+set -e
+
+if [ ! -d "$HOME/.bin/" ]; then
+  mkdir "$HOME/.bin"
+fi
+
+if [ ! -f "$HOME/.zshrc" ]; then
+  touch "$HOME/.zshrc"
+fi
+
+# shellcheck disable=SC2016
+append_to_zshrc 'export PATH="$HOME/.bin:$PATH"'
+
+HOMEBREW_PREFIX="/usr/local"
+
+if [ -d "$HOMEBREW_PREFIX" ]; then
+  if ! [ -r "$HOMEBREW_PREFIX" ]; then
+    sudo chown -R "$LOGNAME:admin" /usr/local
+  fi
+else
+  sudo mkdir "$HOMEBREW_PREFIX"
+  sudo chflags norestricted "$HOMEBREW_PREFIX"
+  sudo chown -R "$LOGNAME:admin" "$HOMEBREW_PREFIX"
+fi
+
+update_shell() {
+  local shell_path;
+  shell_path="$(command -v zsh)"
+
+  fancy_echo "Changing your shell to zsh ..."
+  if ! grep "$shell_path" /etc/shells > /dev/null 2>&1 ; then
+    fancy_echo "Adding '$shell_path' to /etc/shells"
+    sudo sh -c "echo $shell_path >> /etc/shells"
+  fi
+  sudo chsh -s "$shell_path" "$USER"
+}
+
+case "$SHELL" in
+  */zsh)
+    if [ "$(command -v zsh)" != '/usr/local/bin/zsh' ] ; then
+      update_shell
+    fi
+    ;;
+  *)
+    update_shell
+    ;;
+esac
+
+gem_install_or_update() {
+  if gem list "$1" --installed > /dev/null; then
+    gem update "$@"
+  else
+    gem install "$@"
+  fi
+}
+
+fancy_echo "Setting the shell environment ..."
+touch ~/.hushlogin
+
+if ! command -v brew >/dev/null; then
+  fancy_echo "Installing Homebrew ..."
+  /bin/bash -c \
+    "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/master/install.sh)"
+
+  append_to_zshrc '# recommended by brew doctor'
+
+  # shellcheck disable=SC2016
+  append_to_zshrc 'export PATH="/usr/local/bin:$PATH"' 1
+
+  export PATH="/usr/local/bin:$PATH"
+fi
+
+if brew list | grep -Fq brew-cask; then
+  fancy_echo "Uninstalling old Homebrew-Cask ..."
+  brew uninstall --force brew-cask
+fi
+
+fancy_echo "Updating Homebrew formulae ..."
+brew update --force # https://github.com/Homebrew/brew/issues/1151
+brew bundle --file=- <<EOF
+tap "homebrew/services"
+tap "heroku/brew"
+
+# Unix
+brew "git"
+brew "openssl"
+brew "gpg2"
+brew "autoconf"
+brew "wget"
+brew "vim"
+brew "zsh"
+brew "zsh-syntax-highlighting"
+brew "z"
+
+# Image manipulation
+brew "imagemagick"
+
+# Programming language prerequisites and package managers
+brew "yarn"
+
+# Databases
+brew "postgres"
+EOF
+
+fancy_echo "Configuring ZSH Syntax Highlighting ..."
+append_to_zshrc '# Enables ZSH Syntax Highlighting.'
+append_to_zshrc 'source /usr/local/share/zsh-syntax-highlighting/zsh-syntax-highlighting.zsh' 1
+
+fancy_echo "Configuring Z ..."
+append_to_zshrc '# Enables Z.'
+append_to_zshrc '. /usr/local/etc/profile.d/z.sh' 1
+touch "$HOME/.z"
+
+if [ ! -d "$HOME/.oh-my-zsh" ]; then
+  fancy_echo "Installing Oh My Zsh ..."
+  /bin/bash -c \
+    "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)"
+fi
+
+if [ ! -f "$HOME/.aliases" ]; then
+  fancy_echo "Configuring aliases ..."
+  wget -O .aliases https://raw.githubusercontent.com/andreihelo/warmachine/main/shell/aliases
+  append_to_zshrc '# Enables aliases.'
+  append_to_zshrc 'source $HOME/.aliases' 1
+fi
+
+if [ ! -f "$HOME/.gitconfig" ]; then
+  fancy_echo "Configuring git ..."
+  wget -O .gitconfig https://raw.githubusercontent.com/andreihelo/warmachine/main/git/gitconfig
+fi
+
+if [ ! -f "$HOME/.randomizer.rb" ]; then
+  fancy_echo "Installing randomizer ..."
+  wget -O .randomizer.rb https://raw.githubusercontent.com/andreihelo/warmachine/main/utils/randomizer.rb
+  chmod u+x "$HOME/.randomizer.rb"
+fi
+
+if [ ! -f "$HOME/.vim/colors/monokai-soda.vim" ]; then
+  fancy_echo "Configuring vim ..."
+  mkdir -p "$HOME/.vim/colors"
+  wget -P "$HOME/.vim/colors" https://raw.githubusercontent.com/andreihelo/warmachine/main/colors/vim/monokai-soda.vim
+  printf "set backspace=indent,eol,start" >> "$HOME/.vimrc"
+  printf "\ncolo monokai-soda\nsyntax on" >> "$HOME/.vimrc"
+fi
+
+if ! ls -lha "$HOME/Downloads" | grep -Fq Soda.itermcolors; then
+  fancy_echo "Downloading Monokai Soda for iTerm ..."
+  wget -P "$HOME/Downloads/" https://raw.githubusercontent.com/andreihelo/warmachine/main/colors/iterm/Monokai%20Soda.itermcolors
+fi
+
+if ! system_profiler SPFontsDataType | grep -Fq Meslo; then
+  fancy_echo "Installing Powerline fonts ..."
+  git clone https://github.com/powerline/fonts.git
+  cd fonts
+  ./install.sh
+  cd ..
+  rm -rf fonts
+fi
+
+fancy_echo "Configuring asdf version manager ..."
+if [ ! -d "$HOME/.asdf" ]; then
+  git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.5.0
+  append_to_zshrc '# Enables asdf.'
+  append_to_zshrc "source $HOME/.asdf/asdf.sh" 1
+fi
+
+alias install_asdf_plugin=add_or_update_asdf_plugin
+add_or_update_asdf_plugin() {
+  local name="$1"
+  local url="$2"
+
+  if ! asdf plugin-list | grep -Fq "$name"; then
+    asdf plugin-add "$name" "$url"
+  else
+    asdf plugin-update "$name"
+  fi
+}
+
+# shellcheck disable=SC1090
+source "$HOME/.asdf/asdf.sh"
+add_or_update_asdf_plugin "nodejs" "https://github.com/asdf-vm/asdf-nodejs.git"
+add_or_update_asdf_plugin "erlang" "https://github.com/asdf-vm/asdf-erlang.git"
+add_or_update_asdf_plugin "elixir" "https://github.com/asdf-vm/asdf-elixir.git"
+
+install_asdf_language() {
+  local language="$1"
+  local version
+  version="$(asdf list-all "$language" | grep -v "[a-z]" | tail -1)"
+
+  if ! asdf list "$language" | grep -Fq "$version"; then
+    asdf install "$language" "$version"
+    asdf global "$language" "$version"
+  fi
+}
+
+fancy_echo "Installing latest Node ..."
+bash "$HOME/.asdf/plugins/nodejs/bin/import-release-team-keyring"
+install_asdf_language "nodejs"
+
+fancy_echo "Installing latest Erlang ..."
+export KERL_CONFIGURE_OPTIONS="--disable-debug --without-javac"
+install_asdf_language "erlang"
+
+fancy_echo "Installing latest Elixir ..."
+install_asdf_language "elixir"
+mix local.hex --force
+mix archive.install --force hex phx_new
+
+fancy_echo "Installing RVM with the latest Ruby ..."
+gpg --keyserver hkp://pool.sks-keyservers.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB
+\curl -sSL https://get.rvm.io | bash -s stable --auto-dotfiles --ruby
+source "$HOME/.rvm/scripts/rvm"
+rvm autolibs enable
+
+fancy_echo "Updating Ruby tools ..."
+gem update --system
+gem_install_or_update 'rdoc'
+gem_install_or_update 'bundler'
+number_of_cores=$(sysctl -n hw.ncpu)
+bundle config --global jobs $((number_of_cores - 1))
+
+if ! ls -al ~/.ssh | grep -Fq id_ed25519; then
+  fancy_echo "Generating SSH keys ..."
+  ssh-keygen -t ed25519 -C "andreihelo@gmail.com"
+fi
+
+if [ ! -f "$HOME/.ssh/config" ]; then
+  fancy_echo "Configuring SSH config ..."
+  eval "$(ssh-agent -s)"
+  wget -P "$HOME/.ssh/" https://raw.githubusercontent.com/andreihelo/warmachine/main/ssh/config
+fi
+
+if [ -f "$HOME/.warmachine.local" ]; then
+  fancy_echo "Running your customizations from ~/.warmachine.local ..."
+  # shellcheck disable=SC1090
+  . "$HOME/.warmachine.local"
+fi

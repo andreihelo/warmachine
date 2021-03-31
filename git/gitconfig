@@ -1,0 +1,32 @@
+[user]
+    name = Andrei Helo
+    email = andreihelo@gmail.com
+[core]
+    editor = vim
+[init]
+    defaultBranch = main
+[color]
+    ui = true
+[push]
+    default = simple
+[alias]
+    st = status
+    co = checkout
+    ci = commit
+    br = branch
+    df = diff
+    lp = log -p
+    com = checkout master
+    fe = fetch origin
+    hr = reset origin/master --hard
+    me = config user.name
+    lg = log --graph --pretty=format:'%Cred%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr)%Creset' --abbrev-commit --date=relative
+    du = diff --name-status --diff-filter=U
+    ctrlz = reset --hard HEAD~1
+    uncommit = reset HEAD^
+[filter "media"]
+    clean = git media clean %f
+    smudge = git media smudge %f
+    required = true
+[pull]
+    rebase = false

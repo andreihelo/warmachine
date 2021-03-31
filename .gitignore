@@ -1,0 +1,9 @@
+# Ignore OS files.
+.DS_Store
+
+# Ignore IDE's and plugins settings.
+/.idea
+/nbproject
+.elixir_ls/
+.vscode/
+
